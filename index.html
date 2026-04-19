@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="pt-br">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Backrooms: No-Clip</title>
+    <link rel="stylesheet" href="styles/main.css" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'/%3E" />
+  </head>
+  <body>
+    <div id="overlay" class="visible">
+      <div class="panel">
+        <div class="title">BACKROOMS: NO-CLIP</div>
+        <div class="subtitle">Clique para iniciar. Use fones de ouvido.</div>
+
+        <div id="menuMain">
+          <div id="loading" class="loading">Carregando...</div>
+          <div class="menuButtons">
+            <button id="startBtn">INICIAR</button>
+            <button id="optionsBtn">OPCOES</button>
+            <button id="exitBtn">SAIR</button>
+          </div>
+        </div>
+
+        <div id="menuOptions" class="hidden">
+          <div class="options">
+            <div class="optionRow">
+              <label for="masterVolume">Volume Geral</label>
+              <input id="masterVolume" type="range" min="0" max="100" value="80" />
+            </div>
+          <div class="optionRow">
+            <label for="sfxVolume">Volume Efeitos</label>
+            <input id="sfxVolume" type="range" min="0" max="100" value="80" />
+          </div>
+          <div class="optionRow">
+            <label for="mouseSensitivity">Sensibilidade do Mouse</label>
+            <input id="mouseSensitivity" type="range" min="30" max="200" value="100" />
+          </div>
+        </div>
+          <div class="tips">
+            <div>WASD: mover</div>
+            <div>Mouse: olhar</div>
+            <div>Shift: correr (stamina)</div>
+            <div>F: lanterna</div>
+            <div>Click: travar mouse</div>
+          </div>
+          <button id="backBtn">VOLTAR</button>
+        </div>
+
+        <div id="menuGameOver" class="hidden">
+          <div class="gameoverTitle">VOCE FOI ALCANCADO</div>
+          <div class="menuButtons">
+            <button id="restartBtn">REINICIAR</button>
+            <button id="menuBtn">MENU PRINCIPAL</button>
+          </div>
+        </div>
+
+        <div id="menuPause" class="hidden">
+          <div class="gameoverTitle">PAUSADO</div>
+          <div class="menuButtons">
+            <button id="continueBtn">CONTINUAR</button>
+            <button id="pauseMenuBtn">MENU PRINCIPAL</button>
+          </div>
+        </div>
+
+        <div class="hint">Sem tutorial. Sem saida facil.</div>
+      </div>
+    </div>
+
+    <div id="vhs">
+      <div class="vhs-top">
+        <div class="vhs-left">
+          <div>PLAY ▶</div>
+          <div class="rec">REC ●</div>
+        </div>
+        <div id="vhsTime" class="vhs-time">00:00:00</div>
+      </div>
+      <div class="vhs-bottom">
+        <div>AM 00:00</div>
+        <div>May 05 1970</div>
+      </div>
+      <div class="vhs-frame tl"></div>
+      <div class="vhs-frame tr"></div>
+      <div class="vhs-frame bl"></div>
+      <div class="vhs-frame br"></div>
+    </div>
+
+    <div id="hud">
+      <div id="status">
+        <div id="stamina">
+          <div class="label">STAMINA</div>
+          <div class="bar"><div class="fill" id="staminaFill"></div></div>
+        </div>
+        <div id="info">F: Lanterna | Shift: Correr</div>
+      </div>
+      <div id="crosshair">+</div>
+      <div id="message" class="hidden"></div>
+    </div>
+
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.module.js",
+          "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.152.2/examples/jsm/"
+        }
+      }
+    </script>
+    <script type="module" src="scripts/app.js"></script>
+  </body>
+</html>
