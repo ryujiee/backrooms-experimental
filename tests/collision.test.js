@@ -63,3 +63,23 @@ test("line of sight is blocked by walls and clear across open rooms", () => {
   assert.equal(col.segmentClear(a.x, a.z, b.x, b.z), false);
   assert.equal(col.segmentClear(a.x, a.z, c.x, c.z), true);
 });
+
+test("light field: incremental (dirty-row) encode matches a full encode", async () => {
+  const { createLightField } = await import("../scripts/game/lightfield.js");
+  const map = generateMap("lf");
+  const col = createCollision(map);
+  const a = createLightField(map, col);
+  map.lamps.forEach((l, i) => a.setLampLevel(i, l.kind === "off" ? 0 : 1));
+  a.encode();
+  for (let k = 0; k < 200; k++) {
+    a.setLampLevel((k * 37) % map.lamps.length, (k % 3) / 2);
+    if (k % 7 === 0) a.encode();
+  }
+  const incremental = Uint8Array.from(a.encode());
+  const b = createLightField(map, col);
+  map.lamps.forEach((_, i) => b.setLampLevel(i, a.getLampLevel(i)));
+  const full = b.encode();
+  let maxDiff = 0;
+  for (let i = 0; i < full.length; i++) maxDiff = Math.max(maxDiff, Math.abs(full[i] - incremental[i]));
+  assert.ok(maxDiff <= 1, `max byte difference ${maxDiff}`);
+});

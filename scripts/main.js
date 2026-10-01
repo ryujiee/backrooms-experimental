@@ -220,6 +220,11 @@ async function boot() {
     if (state !== "PAUSED") return;
     const ok = await input.lock();
     if (state !== "PAUSED") return;
+    // Already locked (no pointerlockchange will fire): resume directly.
+    if (ok && input.isLocked()) {
+      enterPlaying();
+      return;
+    }
     if (!ok) {
       // Browsers refuse re-locking right after Esc; ask for one more click.
       ui.hideScreens();
@@ -288,7 +293,7 @@ async function boot() {
   input.onLockChange((locked, error) => {
     if (locked && state === "PAUSED" && ui.screen !== "settings") enterPlaying();
     else if (!locked && state === "PLAYING") pause();
-    if (error && state === "PAUSED") {
+    if (error && state === "PAUSED" && ui.screen !== "settings") {
       ui.hideScreens();
       ui.setLockHint(true);
     }

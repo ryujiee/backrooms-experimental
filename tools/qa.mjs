@@ -424,7 +424,7 @@ const scenarios = {
     const b = await page.eval("__game.info()");
     out.pauseFreezes = a.monster.x === b.monster.x && a.monster.z === b.monster.z && a.time === b.time;
     out.pausedState = await page.eval("__game.state");
-    await page.eval("__game.virtualLock(true)");
+    // Lock already held when resuming (no lock-change event will fire).
     await page.eval("__game.resume()");
     await sleep(300);
     out.resumedState = await page.eval("__game.state");

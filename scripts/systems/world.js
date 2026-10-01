@@ -731,7 +731,7 @@ export function createWorld({ scene, map, collision, lightField, lamp, textures,
     // Wall slots already taken by props or objectives (a new door must not cover them).
     usedWallSlots: () => {
       const { power, tape, exit } = map.objectives;
-      const slots = map.props.filter((p) => ["wallStain", "vent", "fakeDoor", "scribble", "desk", "boxes"].includes(p.type)).map((p) => `${p.index}:${p.dir}`);
+      const slots = map.props.filter((p) => ["wallStain", "vent", "fakeDoor", "scribble", "desk", "boxes", "chair"].includes(p.type)).map((p) => `${p.index}:${p.dir}`);
       return new Set([...slots, `${power.index}:${power.dir}`, `${tape.index}:${tape.dir}`, `${exit.index}:${exit.dir}`]);
     },
     dispose() {

@@ -36,6 +36,7 @@ export const AI = {
 const CALM = new Set([S.IDLE, S.PATROL, S.SEARCH, S.INVESTIGATE]);
 const DEAF = new Set([S.COOLDOWN, S.CHASE, S.ALERT, S.STALK, S.CROSS]);
 const RESTFUL = new Set([S.IDLE, S.PATROL, S.COOLDOWN, S.DORMANT]);
+const ALERTABLE = new Set([S.IDLE, S.PATROL, S.SEARCH, S.COOLDOWN, S.DORMANT]);
 // From stage 2 on, patrols are planned around a stale "scent" of where the player
 // was (refreshed every SCENT_INTERVAL s), never around their live position.
 const SCENT_INTERVAL = [0, 0, 20, 14, 10];
@@ -555,7 +556,7 @@ export function createMonster({ map, collision, lightField, rng }) {
       if (goTo(to.x, to.z)) setState(S.CROSS);
     },
     alertTo(x, z) {
-      if ([S.IDLE, S.PATROL, S.SEARCH, S.COOLDOWN, S.DORMANT].includes(m.state)) investigate(x, z);
+      if (ALERTABLE.has(m.state)) investigate(x, z);
     },
     retreat(ctx) {
       startRetreat(ctx);

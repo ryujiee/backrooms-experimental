@@ -379,9 +379,9 @@ export function createAudio() {
       );
     },
 
+    // Unconditional: ctx.state may lag behind a pending suspend() in some browsers.
     resume() {
-      if (ctx.state !== "running") return ctx.resume().catch(() => {});
-      return Promise.resolve();
+      return ctx.resume().catch(() => {});
     },
     suspend() {
       if (ctx.state === "running") return ctx.suspend().catch(() => {});

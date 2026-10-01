@@ -99,6 +99,8 @@ export function createSession(opts) {
   let result = null;
   let pending = [];
   const noises = [];
+  // The creature only plays its attack while the death sequence runs (no perception, no noise).
+  const DYING_CTX = { player: { x: 0, z: 0, vx: 0, vz: 0, crouch: 0, flashlightOn: false, dirX: 0, dirZ: 0 }, noises: [], grace: true, godMode: true };
   let holdNoiseT = 0;
   let presenceT = 0;
   let buzzT = 0;
@@ -438,7 +440,7 @@ export function createSession(opts) {
     if (phase === "dying" || phase === "winning") {
       sequenceT += dt;
       if (phase === "dying") {
-        monster.update(dt, { player: { ...player.pos, vx: 0, vz: 0, crouch: 0, flashlightOn: false, dirX: 0, dirZ: 0 }, noises: [], grace: false, godMode: true });
+        monster.update(dt, DYING_CTX);
         if (sequenceT > 2.6 && !result) result = { type: "dead" };
       } else {
         // Walk into the light.
