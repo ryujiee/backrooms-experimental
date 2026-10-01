@@ -624,7 +624,7 @@ export function createSession(opts) {
     }
 
     let override = null;
-    let handDrop = 0;
+    let handDrop = menu ? 1 : 0;
     let eye = player.eyeHeight();
     if (phase === "intro" || phase === "wake") {
       const t = Math.min(1, wake / 3.2);

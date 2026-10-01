@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { cellCenter } from "../game/grid.js";
+import { cellCenter, canMove } from "../game/grid.js";
 import { S } from "../game/monster.js";
 
 // Development-only overlay and QA hooks (never bundled in production: loaded via
@@ -110,6 +110,20 @@ export function createDebug(ctx) {
     quality: (name) => ctx.applyPreset(name),
     timeScale: (n) => (ctx.dev.timeScale = Math.max(1, Math.min(8, n))),
     kill: () => ctx.session.debugKill(),
+    // Creature standing in plain sight down the line of view (for screenshots).
+    monsterAhead: (dist = 8) => {
+      const s = ctx.session;
+      s.endGrace();
+      const f = { x: -Math.sin(s.player.yaw), z: -Math.cos(s.player.yaw) };
+      let d = dist;
+      while (d > 2 && !s.collision.corridorClear(s.player.pos.x, s.player.pos.z, s.player.pos.x + f.x * d, s.player.pos.z + f.z * d, 0.4)) d -= 0.5;
+      s.monster.relocate(s.player.pos.x + f.x * d, s.player.pos.z + f.z * d);
+      s.monster.m.yaw = Math.atan2(-f.x, -f.z);
+      s.monster.m.state = S.STALK;
+      s.monster.m.stalk = { watch: 99, timeout: 99 };
+      s.monster.m.observed = 0;
+      return d;
+    },
     monsterNear: () => {
       const s = ctx.session;
       s.endGrace();
@@ -136,6 +150,29 @@ export function createDebug(ctx) {
         s.player.yaw = Math.atan2(-(far.x - c.x), -(far.z - c.z));
         s.player.pitch = 0;
         return true;
+      }
+      if (name === "corridor") {
+        // Longest straight open run in the map, looking down its length.
+        const g = s.map.grid;
+        let best = null;
+        for (let i = 0; i < g.w * g.h; i++) {
+          for (const d of [1, 2]) {
+            let x = i % g.w;
+            let y = (i / g.w) | 0;
+            let len = 0;
+            while (canMove(g, x, y, d)) {
+              x += d === 1 ? 1 : 0;
+              y += d === 2 ? 1 : 0;
+              len++;
+            }
+            if (!best || len > best.len) best = { i, d, len };
+          }
+        }
+        const a = cellCenter(g, best.i % g.w, (best.i / g.w) | 0);
+        s.player.teleport(a.x, a.z);
+        s.player.yaw = best.d === 1 ? -Math.PI / 2 : Math.PI;
+        s.player.pitch = 0;
+        return best.len;
       }
       target = o[name];
       if (!target) return false;
