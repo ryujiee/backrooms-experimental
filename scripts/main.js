@@ -29,6 +29,8 @@ const INTRO_LINES = [
   { at: 5.7, text: "Alguma coisa também acordou." },
 ];
 const INTRO_LENGTH = 8.2;
+const REWIND_LINES = [{ at: 0.1, text: "◀◀ REBOBINANDO", small: true }];
+const REWIND_LENGTH = 2.2;
 
 const ui = createUI();
 
@@ -94,6 +96,9 @@ async function boot() {
   let session = null;
   let currentSeed = null;
   let introT = 0;
+  let introLength = INTRO_LENGTH;
+  // Progress carried across checkpoint retries of the same run.
+  const run = { checkpoint: 0, timeOffset: 0 };
   let acc = 0;
   let last = performance.now();
   let loopErrors = 0;
@@ -123,9 +128,9 @@ async function boot() {
     session = null;
   }
 
-  function makeSession(seed, mode) {
+  function makeSession(seed, mode, extra = {}) {
     disposeSession();
-    session = createSession({ seed, mode, scene, lamp, textures, quality: preset, audio, ui, view, assets, settings, camera });
+    session = createSession({ seed, mode, scene, lamp, textures, quality: preset, audio, ui, view, assets, settings, camera, ...extra });
     acc = 0;
     return session;
   }
@@ -145,28 +150,36 @@ async function boot() {
     ui.show("menu");
   }
 
-  function startRun(seed) {
+  // fromCheckpoint: resume the current run from its last completed objective.
+  function startRun(seed, fromCheckpoint = false) {
     audio.resume();
     input.lock();
-    currentSeed = seed || settings.seed || randomSeedLabel();
+    if (!fromCheckpoint) {
+      currentSeed = seed || settings.seed || randomSeedLabel();
+      run.checkpoint = 0;
+      run.timeOffset = 0;
+    }
     try {
-      makeSession(currentSeed, "game");
+      makeSession(currentSeed, "game", { checkpoint: run.checkpoint, timeOffset: run.timeOffset });
     } catch (err) {
       log.error(err);
       currentSeed = randomSeedLabel();
+      run.checkpoint = 0;
+      run.timeOffset = 0;
       makeSession(currentSeed, "game");
     }
-    stats.runs += 1;
+    stats.runs += fromCheckpoint ? 0 : 1;
     saveStats(stats);
     state = "INTRO";
     introT = 0;
+    introLength = fromCheckpoint ? REWIND_LENGTH : INTRO_LENGTH;
     ui.hideScreens();
     ui.clearHud();
     ui.setHudVisible(false);
     ui.setLockHint(false);
     ui.setFadeColor("#000");
     ui.setFade(1);
-    ui.showIntro(INTRO_LINES);
+    ui.showIntro(fromCheckpoint ? REWIND_LINES : INTRO_LINES);
     audio.glitch();
     monitor.reset();
   }
@@ -224,18 +237,24 @@ async function boot() {
       rows.push(["Melhor tempo", `${formatTime(stats.bestTime)}${record ? "  (novo recorde)" : ""}`]);
     } else {
       stats.deaths += 1;
+      run.checkpoint = s.objectives;
+      run.timeOffset = s.time;
+      ui.setRetryLabel(run.checkpoint > 0);
     }
     saveStats(stats);
     ui.setEndStats(kind, rows);
     ui.show(kind === "win" ? "win" : "dead");
-    ui.setFade(kind === "win" ? 0.85 : 0.6);
+    // The tape simply stops: cut to black behind the end card.
+    ui.setFadeColor("#000");
+    ui.setFade(1);
   }
 
   // --- UI actions ---
   ui.on("play", () => startRun());
   ui.on("resume", resume);
   ui.on("restart", () => startRun(currentSeed));
-  ui.on("retry", () => startRun(currentSeed));
+  ui.on("retry", () => startRun(currentSeed, true));
+  ui.on("restartfull", () => startRun(currentSeed));
   ui.on("newseed", () => startRun(randomSeedLabel()));
   ui.on("menu", enterMenu);
   ui.on("fullscreen", () => {
@@ -312,7 +331,7 @@ async function boot() {
     if (running) {
       if (state === "INTRO") {
         introT += dt;
-        if (introT >= INTRO_LENGTH) finishIntro();
+        if (introT >= introLength) finishIntro();
       }
       acc += dt * dev.timeScale;
       while (acc >= STEP && steps < MAX_STEPS * dev.timeScale) {

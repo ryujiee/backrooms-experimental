@@ -108,6 +108,7 @@ export function createDebug(ctx) {
     autopilot: setAutopilot,
     quality: (name) => ctx.applyPreset(name),
     timeScale: (n) => (ctx.dev.timeScale = Math.max(1, Math.min(8, n))),
+    kill: () => ctx.session.debugKill(),
     monsterNear: () => {
       const s = ctx.session;
       s.endGrace();

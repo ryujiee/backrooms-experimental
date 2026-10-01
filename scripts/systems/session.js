@@ -44,6 +44,7 @@ function localRectToWorld(frame, x0, x1, z0, z1) {
 
 export function createSession(opts) {
   const { seed, mode, scene, lamp, textures, quality, audio, ui, view, assets, settings, camera } = opts;
+  const timeOffset = opts.timeOffset || 0;
   const menu = mode === "menu";
   const map = generateMap(seed);
   const g = map.grid;
@@ -156,14 +157,14 @@ export function createSession(opts) {
   }
 
   // --- objectives ------------------------------------------------------------
-  function onObjective(id) {
+  // silent: re-applies the world changes without feedback (checkpoint restore).
+  function onObjective(id, silent = false) {
     director.progressMade();
     const next = STEPS[objectives.step];
+    const fx = !silent;
     if (id === "power") {
       setStage(1);
       world.setPanelPowered();
-      audio.panelClunk({ x: ot.panel.x, y: 1.4, z: ot.panel.z });
-      audio.powerSurge();
       audio.setLocator("panel", null, false);
       // Dark sectors partially come back, flickering.
       map.lamps.forEach((l, i) => {
@@ -172,39 +173,47 @@ export function createSession(opts) {
         if (roll < 0.25) world.setLamp(i, LAMP.ON);
         else if (roll < 0.7) world.setLamp(i, LAMP.FLICKER);
       });
-      world.lampSequence(world.lampsNear(player.pos.x, player.pos.z, 30).map((l) => l.i), { interval: 0.05, level: 0.02, hold: 0.9 });
-      world.dipPower(0.8);
-      ui.message("A energia voltou.", 3);
-      subtitle("a energia volta com um estalo");
-      later(4, () => {
-        audio.screech({ x: monster.pos.x, y: 1.5, z: monster.pos.z }, { distant: true });
-        subtitle("um grito distante", monster.pos);
-      });
+      if (fx) {
+        audio.panelClunk({ x: ot.panel.x, y: 1.4, z: ot.panel.z });
+        audio.powerSurge();
+        world.lampSequence(world.lampsNear(player.pos.x, player.pos.z, 30).map((l) => l.i), { interval: 0.05, level: 0.02, hold: 0.9 });
+        world.dipPower(0.8);
+        ui.message("A energia voltou.", 3);
+        subtitle("a energia volta com um estalo");
+        later(4, () => {
+          audio.screech({ x: monster.pos.x, y: 1.5, z: monster.pos.z }, { distant: true });
+          subtitle("um grito distante", monster.pos);
+        });
+      }
     } else if (id === "tape") {
       setStage(2);
       world.takeTape();
-      audio.tapeTaken({ x: ot.tape.x, y: 0.3, z: ot.tape.z });
       audio.setLocator("tv", null, false);
       world.setExitPowered(true);
-      glitch = 1.6;
-      audio.glitch();
-      noises.push({ type: "tape", x: ot.tape.x, z: ot.tape.z, radius: 26 });
       // Parts of the map lose power for good.
       map.lamps.forEach((l, i) => {
         const c = world.lampPositions[i];
         const far = Math.hypot(c.x - player.pos.x, c.z - player.pos.z) > 18;
         if (far && world.lampState[i] === LAMP.ON && rng.chance(0.22)) world.setLamp(i, LAMP.OFF);
       });
-      ui.message("Na fita: uma porta de metal sob uma luz vermelha.", 5);
-      later(2.5, () => subtitle("um bipe distante", ot.door));
+      if (fx) {
+        audio.tapeTaken({ x: ot.tape.x, y: 0.3, z: ot.tape.z });
+        glitch = 1.6;
+        audio.glitch();
+        noises.push({ type: "tape", x: ot.tape.x, z: ot.tape.z, radius: 26 });
+        ui.message("Na fita: uma porta de metal sob uma luz vermelha.", 5);
+        later(2.5, () => subtitle("um bipe distante", ot.door));
+      }
     } else if (id === "exit") {
       setStage(3);
       world.setAlarm(true);
       monster.setHotspot({ x: d.x, z: d.z });
       audio.setLocator("door", { x: d.x, y: 1.2, z: d.z }, true, "grind");
       noises.push({ type: "door", x: d.x, z: d.z, radius: 45 });
-      ui.message("A porta está cedendo. Ela vai ouvir.", 4);
-      subtitle("alarme");
+      if (fx) {
+        ui.message("A porta está cedendo. Ela vai ouvir.", 4);
+        subtitle("alarme");
+      }
     } else if (id === "escape") {
       setStage(4);
       world.setAlarm(false);
@@ -215,6 +224,23 @@ export function createSession(opts) {
       subtitle("a porta se abre");
     }
     if (next) ui.setObjective(next.text);
+  }
+
+  // Checkpoint restore: replay completed objectives silently and wake up next to the last one.
+  function restoreCheckpoint(count) {
+    const ids = ["power", "tape", "exit"].slice(0, count);
+    const tvFront = { x: ot.tv.x + ot.tv.normal.x * 1.4, z: ot.tv.z + ot.tv.normal.z * 1.4, normal: ot.tv.normal };
+    const panelFront = { x: ot.panel.x + ot.panel.normal.x * 1.2, z: ot.panel.z + ot.panel.normal.z * 1.2, normal: ot.panel.normal };
+    const doorFront = { x: d.x + d.normal.x * 1.4, z: d.z + d.normal.z * 1.4, normal: d.normal };
+    const at = [panelFront, tvFront, doorFront][count - 1];
+    player.teleport(at.x, at.z);
+    player.yaw = Math.atan2(-at.normal.x, -at.normal.z);
+    for (const id of ids) {
+      objectives.skipTo(objectives.step + 1);
+      onObjective(id, true);
+    }
+    graceUntil = 8;
+    relocateFar(14);
   }
 
   // --- director events ---------------------------------------------------------
@@ -585,6 +611,7 @@ export function createSession(opts) {
     }
 
     let override = null;
+    let handDrop = 0;
     let eye = player.eyeHeight();
     if (phase === "intro" || phase === "wake") {
       const t = Math.min(1, wake / 3.2);
@@ -593,6 +620,7 @@ export function createSession(opts) {
       const reduce = settings.reduceMotion ? 0 : 1;
       override = { yaw: player.yaw + (1 - e) * 0.4 * reduce, pitch: (1 - e) * 1.15, roll: (1 - e) * 0.35 * reduce };
       ui.setFade(Math.max(0, 1 - wake / 2));
+      handDrop = 1 - Math.min(1, Math.max(0, (wake - 1.8) / 1.2));
     } else if (phase === "dying") {
       const k = Math.min(1, sequenceT / 0.25);
       let dy = deathYaw - player.yaw;
@@ -600,10 +628,13 @@ export function createSession(opts) {
       while (dy < -Math.PI) dy += Math.PI * 2;
       override = { yaw: player.yaw + dy * k, pitch: player.pitch + (deathPitch - player.pitch) * k, roll: 0 };
       if (sequenceT > 1.4) ui.setFade(Math.min(1, (sequenceT - 1.4) / 0.7));
+      ui.setHudVisible(false);
     } else if (phase === "winning") {
       exposure = 1 + Math.min(4, sequenceT * 1.6);
       ui.setFadeColor("#fffdf4");
       ui.setFade(Math.min(1, Math.max(0, (sequenceT - 1.2) / 2.2)));
+      ui.setHudVisible(false);
+      handDrop = Math.min(1, sequenceT / 1.5);
     }
 
     const mDist = Math.hypot(monster.pos.x - player.pos.x, monster.pos.z - player.pos.z);
@@ -627,6 +658,7 @@ export function createSession(opts) {
       drainBattery: playing,
       monsterDist: stage >= 1 ? mDist : 99,
       override,
+      handDrop,
     });
     monsterView.update(dt, monster, phase === "play" ? alpha : 1, time);
     world.update(dt, player.pos);
@@ -694,11 +726,13 @@ export function createSession(opts) {
     });
 
     if (!menu) {
-      ui.setOsdTime(time);
+      ui.setOsdTime(timeOffset + time);
       const stam = st ? st.stamina.value : 100;
       ui.setMeters(stam, playing && stam < 99, view.battery, playing && (view.on || view.battery < 30));
     }
   }
+
+  if (!menu && opts.checkpoint > 0) restoreCheckpoint(Math.min(3, opts.checkpoint));
 
   return {
     map,
@@ -734,13 +768,16 @@ export function createSession(opts) {
     },
     canPause: () => phase === "play" || phase === "wake",
     currentObjectiveText: () => objectives.current.text,
-    stats: () => ({ time, objectives: objectives.completedCount, seed: map.seed, stage }),
+    stats: () => ({ time: timeOffset + time, attemptTime: time, objectives: objectives.completedCount, seed: map.seed, stage }),
     // --- debug / QA ---
     completeObjective() {
       const id = objectives.current.id;
       if (id === "leave") return;
       objectives.skipTo(objectives.step + 1);
       onObjective(id);
+    },
+    debugKill() {
+      if (phase === "play") startDeath();
     },
     endGrace() {
       graceUntil = 0;

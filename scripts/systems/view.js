@@ -203,7 +203,7 @@ export function createPlayerView({ camera, scene, flashlightModel, textures, qua
       toggleKick = Math.max(0, toggleKick - dt * 5);
       hand.position.set(
         handRest.x + sway.x * motion + bobX * 0.4,
-        handRest.y + sway.y * motion + bobY * 0.5 - toggleKick * 0.012 - (p.crouchAmount || 0) * 0.02,
+        handRest.y + sway.y * motion + bobY * 0.5 - toggleKick * 0.012 - (p.crouchAmount || 0) * 0.02 - (p.handDrop || 0) * 0.45,
         handRest.z
       );
       hand.rotation.set(-0.04 + toggleKick * 0.05 + sway.y * 0.6, 0.06 + sway.x * 0.8, -0.04 + bobX * 0.6);

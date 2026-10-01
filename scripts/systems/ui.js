@@ -134,6 +134,10 @@ export function createUI() {
     setFullscreenLabel(isFull) {
       $("fullscreen-btn").textContent = isFull ? "SAIR DA TELA CHEIA" : "TELA CHEIA";
     },
+    setRetryLabel(hasCheckpoint) {
+      document.querySelector('#screen-dead [data-action="retry"]').textContent = hasCheckpoint ? "VOLTAR AO ÚLTIMO OBJETIVO" : "TENTAR DE NOVO";
+      document.querySelector('#screen-dead [data-action="restartfull"]').classList.toggle("hidden", !hasCheckpoint);
+    },
     setPauseObjective(text) {
       $("pause-objective").textContent = text ? `Objetivo: ${text}` : "";
     },
