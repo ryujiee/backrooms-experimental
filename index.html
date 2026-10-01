@@ -1,110 +1,186 @@
 <!doctype html>
-<html lang="pt-br">
+<html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Backrooms: No-Clip — um curto jogo de terror procedural nas Backrooms." />
+    <meta name="theme-color" content="#0b0a07" />
     <title>Backrooms: No-Clip</title>
-    <link rel="stylesheet" href="styles/main.css" />
-    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'/%3E" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%23c8b36a'/%3E%3Crect x='6' y='3' width='4' height='10' fill='%23111'/%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="./styles/main.css" />
   </head>
   <body>
-    <div id="overlay" class="visible">
-      <div class="panel">
-        <div class="title">BACKROOMS: NO-CLIP</div>
-        <div class="subtitle">Clique para iniciar. Use fones de ouvido.</div>
+    <canvas id="game" aria-label="Jogo"></canvas>
+    <div id="grain" aria-hidden="true"></div>
+    <div id="vignette" aria-hidden="true"></div>
+    <div id="fade" aria-hidden="true"></div>
 
-        <div id="menuMain">
-          <div id="loading" class="loading">Carregando...</div>
-          <div class="menuButtons">
-            <button id="startBtn">INICIAR</button>
-            <button id="optionsBtn">OPCOES</button>
-            <button id="exitBtn">SAIR</button>
-          </div>
-        </div>
-
-        <div id="menuOptions" class="hidden">
-          <div class="options">
-            <div class="optionRow">
-              <label for="masterVolume">Volume Geral</label>
-              <input id="masterVolume" type="range" min="0" max="100" value="80" />
-            </div>
-          <div class="optionRow">
-            <label for="sfxVolume">Volume Efeitos</label>
-            <input id="sfxVolume" type="range" min="0" max="100" value="80" />
-          </div>
-          <div class="optionRow">
-            <label for="mouseSensitivity">Sensibilidade do Mouse</label>
-            <input id="mouseSensitivity" type="range" min="30" max="200" value="100" />
-          </div>
-        </div>
-          <div class="tips">
-            <div>WASD: mover</div>
-            <div>Mouse: olhar</div>
-            <div>Shift: correr (stamina)</div>
-            <div>F: lanterna</div>
-            <div>Click: travar mouse</div>
-          </div>
-          <button id="backBtn">VOLTAR</button>
-        </div>
-
-        <div id="menuGameOver" class="hidden">
-          <div class="gameoverTitle">VOCE FOI ALCANCADO</div>
-          <div class="menuButtons">
-            <button id="restartBtn">REINICIAR</button>
-            <button id="menuBtn">MENU PRINCIPAL</button>
-          </div>
-        </div>
-
-        <div id="menuPause" class="hidden">
-          <div class="gameoverTitle">PAUSADO</div>
-          <div class="menuButtons">
-            <button id="continueBtn">CONTINUAR</button>
-            <button id="pauseMenuBtn">MENU PRINCIPAL</button>
-          </div>
-        </div>
-
-        <div class="hint">Sem tutorial. Sem saida facil.</div>
+    <div id="osd" class="hidden" aria-hidden="true">
+      <div class="osd-tl">
+        <div>PLAY ▶</div>
+        <div class="osd-rec"><span class="rec-dot">●</span> REC</div>
       </div>
+      <div class="osd-tr" id="osd-time">00:00:00</div>
+      <div class="osd-bl" id="osd-tape">SP</div>
+      <div class="osd-br" id="osd-date">MAI 05 1996</div>
     </div>
 
-    <div id="vhs">
-      <div class="vhs-top">
-        <div class="vhs-left">
-          <div>PLAY ▶</div>
-          <div class="rec">REC ●</div>
+    <div id="hud" class="hidden">
+      <div id="objective" aria-live="polite">
+        <div class="obj-label">OBJETIVO</div>
+        <div id="objective-text"></div>
+      </div>
+      <div id="controls-hint"></div>
+      <div id="prompt" class="hidden">
+        <div id="prompt-text"></div>
+        <div class="prompt-bar"><div id="prompt-fill"></div></div>
+      </div>
+      <div id="message" aria-live="polite"></div>
+      <div id="subtitles" aria-live="polite"></div>
+      <div id="meters">
+        <div class="meter-row" id="battery-row">
+          <span class="meter-label">LUZ</span>
+          <div class="meter"><div class="meter-fill" id="battery-fill"></div></div>
         </div>
-        <div id="vhsTime" class="vhs-time">00:00:00</div>
+        <div class="meter-row" id="stamina-row">
+          <span class="meter-label">FÔLEGO</span>
+          <div class="meter"><div class="meter-fill" id="stamina-fill"></div></div>
+        </div>
       </div>
-      <div class="vhs-bottom">
-        <div>AM 00:00</div>
-        <div>May 05 1970</div>
-      </div>
-      <div class="vhs-frame tl"></div>
-      <div class="vhs-frame tr"></div>
-      <div class="vhs-frame bl"></div>
-      <div class="vhs-frame br"></div>
+      <div id="crosshair"></div>
     </div>
 
-    <div id="hud">
-      <div id="status">
-        <div id="stamina">
-          <div class="label">STAMINA</div>
-          <div class="bar"><div class="fill" id="staminaFill"></div></div>
-        </div>
-        <div id="info">F: Lanterna | Shift: Correr</div>
-      </div>
-      <div id="crosshair">+</div>
-      <div id="message" class="hidden"></div>
+    <div id="intro" class="hidden" aria-live="polite">
+      <div id="intro-lines"></div>
+      <div class="intro-skip">clique ou [espaço] para pular</div>
     </div>
 
-    <script type="importmap">
-      {
-        "imports": {
-          "three": "https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.module.js",
-          "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.152.2/examples/jsm/"
-        }
-      }
-    </script>
-    <script type="module" src="scripts/app.js"></script>
+    <button id="lock-hint" class="hidden" type="button">Clique para voltar ao jogo</button>
+
+    <main id="ui">
+      <section id="screen-loading" class="screen active">
+        <h1 class="title" data-text="BACKROOMS">BACKROOMS</h1>
+        <div class="subtitle">NO-CLIP</div>
+        <div class="loader"><div id="loading-fill"></div></div>
+        <div id="loading-text" class="muted">Carregando...</div>
+      </section>
+
+      <section id="screen-menu" class="screen">
+        <h1 class="title" data-text="BACKROOMS">BACKROOMS</h1>
+        <div class="subtitle">NO-CLIP</div>
+        <nav class="menu">
+          <button type="button" data-action="play">JOGAR</button>
+          <button type="button" data-action="settings">CONFIGURAÇÕES</button>
+          <button type="button" data-action="controls">CONTROLES</button>
+          <button type="button" data-action="credits">CRÉDITOS</button>
+        </nav>
+        <div class="footer muted">
+          <div id="menu-stats"></div>
+          <div>Use fones de ouvido. Jogue no escuro.</div>
+        </div>
+      </section>
+
+      <section id="screen-settings" class="screen">
+        <h2>CONFIGURAÇÕES</h2>
+        <form class="settings" id="settings-form" autocomplete="off">
+          <label>Volume geral <output data-for="master"></output><input type="range" name="master" min="0" max="100" /></label>
+          <label>Efeitos <output data-for="sfx"></output><input type="range" name="sfx" min="0" max="100" /></label>
+          <label>Ambiente <output data-for="ambience"></output><input type="range" name="ambience" min="0" max="100" /></label>
+          <label>Sensibilidade do mouse <output data-for="sensitivity"></output><input type="range" name="sensitivity" min="10" max="300" /></label>
+          <label>Campo de visão <output data-for="fov"></output><input type="range" name="fov" min="60" max="95" /></label>
+          <label>Qualidade
+            <select name="quality">
+              <option value="auto">Automática</option>
+              <option value="low">Baixa</option>
+              <option value="medium">Média</option>
+              <option value="high">Alta</option>
+            </select>
+          </label>
+          <label class="check"><input type="checkbox" name="reduceMotion" /> Reduzir movimento da câmera</label>
+          <label class="check"><input type="checkbox" name="subtitles" /> Legendas de sons importantes</label>
+          <label>Seed (opcional — vazio = aleatória)<input type="text" name="seed" maxlength="24" placeholder="aleatória" spellcheck="false" /></label>
+        </form>
+        <nav class="menu row">
+          <button type="button" data-action="fullscreen" id="fullscreen-btn">TELA CHEIA</button>
+          <button type="button" data-action="back">VOLTAR</button>
+        </nav>
+      </section>
+
+      <section id="screen-controls" class="screen">
+        <h2>CONTROLES</h2>
+        <dl class="keys">
+          <dt>W A S D</dt><dd>andar</dd>
+          <dt>Mouse</dt><dd>olhar</dd>
+          <dt>Shift</dt><dd>correr (gasta fôlego)</dd>
+          <dt>C</dt><dd>agachar (silencioso)</dd>
+          <dt>F</dt><dd>lanterna</dd>
+          <dt>E</dt><dd>interagir (segure quando pedido)</dd>
+          <dt>Tab</dt><dd>ver objetivo</dd>
+          <dt>Esc</dt><dd>pausar</dd>
+        </dl>
+        <p class="muted small">Correr faz barulho. A lanterna te ajuda a ver — e a ser visto.</p>
+        <nav class="menu"><button type="button" data-action="back">VOLTAR</button></nav>
+      </section>
+
+      <section id="screen-credits" class="screen">
+        <h2>CRÉDITOS</h2>
+        <div class="credits">
+          <p>Jogo, código, texturas e sons procedurais: projeto BACKROOMS: NO-CLIP.</p>
+          <p>"Bacteria Lifeform (Backrooms)" por <a href="https://sketchfab.com/VHSvince" target="_blank" rel="noopener">VHSvince</a> — <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a> (<a href="https://sketchfab.com/3d-models/bacteria-lifeform-backrooms-0d481d63f87d40e9bbcab60902ddf10a" target="_blank" rel="noopener">fonte</a>).</p>
+          <p>"Old Flashlight" por <a href="https://sketchfab.com/Blender3D" target="_blank" rel="noopener">Blender3D</a> — <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a> (<a href="https://sketchfab.com/3d-models/old-flashlight-576daeaa281840cfb3ece4850cc42469" target="_blank" rel="noopener">fonte</a>). Texturas reduzidas para web.</p>
+          <p>Feito com <a href="https://threejs.org" target="_blank" rel="noopener">three.js</a> (MIT). Fonte Space Mono (OFL).</p>
+          <p class="muted small">Inspirado na ideia coletiva das Backrooms. Nenhum conteúdo de jogos comerciais.</p>
+        </div>
+        <nav class="menu"><button type="button" data-action="back">VOLTAR</button></nav>
+      </section>
+
+      <section id="screen-pause" class="screen">
+        <h2>PAUSADO</h2>
+        <div id="pause-objective" class="muted"></div>
+        <nav class="menu">
+          <button type="button" data-action="resume">CONTINUAR</button>
+          <button type="button" data-action="settings">CONFIGURAÇÕES</button>
+          <button type="button" data-action="restart">REINICIAR</button>
+          <button type="button" data-action="menu">MENU PRINCIPAL</button>
+        </nav>
+      </section>
+
+      <section id="screen-dead" class="screen">
+        <h2 class="danger glitch" data-text="SINAL PERDIDO">SINAL PERDIDO</h2>
+        <div class="stats" id="dead-stats"></div>
+        <nav class="menu">
+          <button type="button" data-action="retry">TENTAR DE NOVO</button>
+          <button type="button" data-action="restartfull" class="hidden">RECOMEÇAR DO INÍCIO</button>
+          <button type="button" data-action="newseed">NOVO MAPA</button>
+          <button type="button" data-action="menu">MENU PRINCIPAL</button>
+        </nav>
+      </section>
+
+      <section id="screen-win" class="screen">
+        <h2>FIM DA GRAVAÇÃO</h2>
+        <div class="epitaph">Lá fora, o zumbido parou.</div>
+        <div class="stats" id="win-stats"></div>
+        <nav class="menu">
+          <button type="button" data-action="newseed">JOGAR NOVAMENTE</button>
+          <button type="button" data-action="menu">MENU PRINCIPAL</button>
+        </nav>
+      </section>
+
+      <section id="screen-error" class="screen">
+        <h2 class="danger">NÃO FOI POSSÍVEL INICIAR</h2>
+        <p id="error-text"></p>
+        <p class="muted small">Tente atualizar a página ou usar um navegador desktop recente (Chrome, Edge ou Firefox) com aceleração de hardware ligada.</p>
+      </section>
+
+      <section id="screen-mobile" class="screen">
+        <h1 class="title" data-text="BACKROOMS">BACKROOMS</h1>
+        <div class="subtitle">NO-CLIP</div>
+        <p>Este jogo precisa de teclado e mouse.</p>
+        <p class="muted small">Abra em um computador para jogar.</p>
+      </section>
+    </main>
+
+    <noscript><p class="noscript">Este jogo precisa de JavaScript.</p></noscript>
+    <script type="module" src="./scripts/main.js"></script>
   </body>
 </html>
