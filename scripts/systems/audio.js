@@ -521,15 +521,19 @@ export function createAudio() {
         }
         g.connect(p).connect(s.amb);
         p.connect(gainNode(0.3)).connect(s.ambWet);
-        loc = s.locators[name] = { p, g, boost: 1 };
+        loc = s.locators[name] = { p, g, boost: 1, on: false };
       }
       if (!loc) return;
       if (pos) setPos(loc.p, pos.x, pos.y ?? 1.2, pos.z);
+      loc.on = on;
       loc.g.gain.setTargetAtTime(on ? 0.5 * loc.boost : 0, now(), on ? 0.4 : 0.05);
     },
+    // Hint: make an objective's locator easier to hear from afar.
     boostLocator(name, amount) {
       const loc = session?.locators[name];
-      if (loc) loc.boost = amount;
+      if (!loc) return;
+      loc.boost = amount;
+      if (loc.on) loc.g.gain.setTargetAtTime(0.5 * amount, now(), 1.5);
     },
 
     // --- discrete sounds ---

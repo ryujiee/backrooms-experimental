@@ -69,6 +69,8 @@ export function createUI() {
   document.addEventListener("keydown", (e) => {
     if (e.code !== "Escape") return;
     if (["settings", "controls", "credits"].includes(current)) {
+      // This Esc only closes the sub-screen; it must not also resume the game.
+      e.stopPropagation();
       show(current === "settings" ? settingsReturn : "menu");
       handlers.back?.();
     }

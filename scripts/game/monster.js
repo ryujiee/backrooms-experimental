@@ -3,8 +3,10 @@ import { findPath, bfsDistances, cellsWithin } from "./pathfinding.js";
 
 // Creature brain + locomotion (no rendering). Perceives the player through sight
 // (distance, cone, line of sight, light, flashlight, crouch) and sound (noise
-// events attenuated by walls). It never reads the player's position unless it can
-// see or hear them; patrol targets use coarse distance bands only.
+// events attenuated by walls, with positional error). Chases and investigations
+// only ever target what it saw or heard. Patrols are planned in distance bands:
+// early on around the player (to stay away / roam nearby), and from stage 2 around
+// a stale "scent" sampled every 10-20 s, never the live position.
 
 export const S = {
   DORMANT: "DORMANT",
@@ -30,6 +32,13 @@ export const AI = {
   stride: 1.5,
   repathChase: 0.35,
 };
+
+const CALM = new Set([S.IDLE, S.PATROL, S.SEARCH, S.INVESTIGATE]);
+const DEAF = new Set([S.COOLDOWN, S.CHASE, S.ALERT, S.STALK, S.CROSS]);
+const RESTFUL = new Set([S.IDLE, S.PATROL, S.COOLDOWN, S.DORMANT]);
+// From stage 2 on, patrols are planned around a stale "scent" of where the player
+// was (refreshed every SCENT_INTERVAL s), never around their live position.
+const SCENT_INTERVAL = [0, 0, 20, 14, 10];
 
 // Threat ramps with progression (objectives completed).
 export const STAGES = [
@@ -73,6 +82,8 @@ export function createMonster({ map, collision, lightField, rng }) {
     stuck: { t: 0, x: start.x, z: start.z, count: 0 },
     events: [],
     heard: null,
+    scent: null,
+    scentT: 0,
   };
 
   const cellOf = (x, z) => worldToIndex(g, x, z);
@@ -220,7 +231,8 @@ export function createMonster({ map, collision, lightField, rng }) {
       const pick = rng.pick(near);
       if (pick && goToCell(pick.index)) return;
     }
-    const dist = playerDistances(ctx.player);
+    const ref = m.stage >= 2 && m.scent ? m.scent : ctx.player;
+    const dist = playerDistances(ref);
     const i = randomCellInBand(dist, st.band[0], st.band[1]);
     if (i >= 0) goToCell(i);
   }
@@ -239,6 +251,7 @@ export function createMonster({ map, collision, lightField, rng }) {
     m.searchPoints = around.slice(0, short ? 2 : rng.int(3, 5)).map((c) => c.index);
     m.searchDuration = short ? st.search * 0.5 : st.search;
     m.pause = 0.6;
+    m.lookBase = m.yaw;
     clearGoal();
     setState(S.SEARCH);
     m.events.push({ type: "search", x: origin.x, z: origin.z });
@@ -250,6 +263,7 @@ export function createMonster({ map, collision, lightField, rng }) {
     if (i >= 0) goToCell(i);
     m.cooldownDuration = rng.range(22, 38);
     m.awareness = 0;
+    m.lookBase = m.yaw;
     setState(S.COOLDOWN);
   }
 
@@ -285,14 +299,16 @@ export function createMonster({ map, collision, lightField, rng }) {
       m.seesPlayer = true;
       const rate = (0.6 + 2.4 * (1 - dist / range)) * vis;
       m.awareness = Math.min(1, m.awareness + rate * dt);
-      m.lastKnown = { x: p.x, z: p.z };
-      m.lastKnownVel = { x: p.vx, z: p.vz };
+      if (!m.lastKnown) m.lastKnown = { x: 0, z: 0 };
+      m.lastKnown.x = p.x;
+      m.lastKnown.z = p.z;
+      m.lastKnownVel.x = p.vx;
+      m.lastKnownVel.z = p.vz;
     } else {
       m.awareness = Math.max(0, m.awareness - dt * (m.state === S.CHASE ? 0.12 : 0.3));
     }
 
-    const deaf = [S.COOLDOWN, S.CHASE, S.ALERT, S.STALK, S.CROSS].includes(m.state);
-    if (deaf || st.hearing <= 0) return;
+    if (DEAF.has(m.state) || st.hearing <= 0) return;
     let best = null;
     for (const n of ctx.noises) {
       const d = Math.hypot(n.x - m.pos.x, n.z - m.pos.z);
@@ -321,6 +337,12 @@ export function createMonster({ map, collision, lightField, rng }) {
 
     perceive(dt, ctx);
 
+    m.scentT -= dt;
+    if (m.scentT <= 0 && SCENT_INTERVAL[m.stage] > 0) {
+      m.scent = { x: p.x, z: p.z };
+      m.scentT = SCENT_INTERVAL[m.stage];
+    }
+
     const dx = p.x - m.pos.x;
     const dz = p.z - m.pos.z;
     const dist = Math.hypot(dx, dz);
@@ -334,18 +356,17 @@ export function createMonster({ map, collision, lightField, rng }) {
           m.events.push({ type: "caught" });
           return;
         }
-      } else if (dist < 3.2 && m.vanishCooldown <= 0 && m.state !== S.COOLDOWN) {
-        // Early stages: getting close makes it vanish (contextual scare, never a death).
+      } else if (dist < 3.2 && m.vanishCooldown <= 0 && m.state !== S.COOLDOWN && collision.segmentClear(m.pos.x, m.pos.z, p.x, p.z)) {
+        // Early stages: getting close (face to face, not through a wall) makes it vanish.
         m.vanishCooldown = 30;
         m.events.push({ type: "vanish", x: m.pos.x, z: m.pos.z });
         startRetreat(ctx, 16);
-        m.events.push({ type: "relocateFar" });
         return;
       }
     }
 
     // Reactions to perception.
-    const calm = [S.IDLE, S.PATROL, S.SEARCH, S.INVESTIGATE].includes(m.state);
+    const calm = CALM.has(m.state);
     if (m.seesPlayer && m.awareness >= 1 && (calm || m.state === S.CROSS)) {
       if (st.canChase) {
         setState(S.ALERT);
@@ -520,6 +541,7 @@ export function createMonster({ map, collision, lightField, rng }) {
       m.pos.x = m.prev.x = x;
       m.pos.z = m.prev.z = z;
       m.speed = 0;
+      m.lookBase = m.yaw;
       m.stuck = { t: 0, x, z, count: 0 };
       clearGoal();
     },
@@ -539,7 +561,7 @@ export function createMonster({ map, collision, lightField, rng }) {
       startRetreat(ctx);
     },
     isHunting: () => m.state === S.CHASE || m.state === S.ALERT,
-    isCalm: () => [S.IDLE, S.PATROL, S.COOLDOWN, S.DORMANT].includes(m.state),
+    isCalm: () => RESTFUL.has(m.state),
     debugPath: () => (m.wps ? m.wps.slice(m.wi) : []),
   };
 }

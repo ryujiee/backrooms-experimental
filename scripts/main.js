@@ -13,6 +13,7 @@ import { createLamp } from "./systems/lampShader.js";
 import { createEffects } from "./systems/effects.js";
 import { createPlayerView } from "./systems/view.js";
 import { createSession } from "./systems/session.js";
+import { createWorldMaterials } from "./systems/world.js";
 import { PRESETS, resolvePreset, createFrameMonitor } from "./systems/quality.js";
 
 // Game states: LOADING -> MENU -> INTRO -> PLAYING <-> PAUSED -> DEAD | WIN.
@@ -80,6 +81,7 @@ async function boot() {
 
   const textures = createTextures(preset.name);
   const lamp = createLamp(textures.macro);
+  const materials = createWorldMaterials(textures, lamp);
   const audio = createAudio();
   audio.setVolumes(settings);
   const input = createInput(canvas);
@@ -130,7 +132,7 @@ async function boot() {
 
   function makeSession(seed, mode, extra = {}) {
     disposeSession();
-    session = createSession({ seed, mode, scene, lamp, textures, quality: preset, audio, ui, view, assets, settings, camera, ...extra });
+    session = createSession({ seed, mode, scene, lamp, textures, materials, quality: preset, audio, ui, view, assets, settings, camera, ...extra });
     acc = 0;
     return session;
   }
@@ -138,6 +140,7 @@ async function boot() {
   // --- state transitions ---
   function enterMenu() {
     input.unlock();
+    audio.resume();
     makeSession(`menu-${randomSeedLabel()}`, "menu");
     state = "MENU";
     ui.clearHud();
@@ -202,21 +205,26 @@ async function boot() {
     ui.show("pause");
   }
 
-  async function resume() {
-    if (state !== "PAUSED") return;
-    ui.setLockHint(false);
-    const ok = await input.lock();
-    if (!ok || !input.isLocked()) {
-      // Browsers refuse re-locking right after Esc; ask for one more click.
-      ui.hideScreens();
-      ui.setLockHint(true);
-      return;
-    }
+  // Acquiring the pointer lock is the single way back into PLAYING. This works the
+  // same whether requestPointerLock returns a promise (Chromium) or not.
+  function enterPlaying() {
     ui.hideScreens();
+    ui.setLockHint(false);
     audio.resume();
     last = performance.now();
     acc = 0;
     state = "PLAYING";
+  }
+
+  async function resume() {
+    if (state !== "PAUSED") return;
+    const ok = await input.lock();
+    if (state !== "PAUSED") return;
+    if (!ok) {
+      // Browsers refuse re-locking right after Esc; ask for one more click.
+      ui.hideScreens();
+      ui.setLockHint(true);
+    }
   }
 
   function endRun(kind) {
@@ -262,16 +270,7 @@ async function boot() {
     else document.documentElement.requestFullscreen?.().catch(() => ui.message("Tela cheia indisponível.", 2));
   });
   document.addEventListener("fullscreenchange", () => ui.setFullscreenLabel(!!document.fullscreenElement));
-  document.getElementById("lock-hint").addEventListener("click", async () => {
-    const ok = await input.lock();
-    if (ok && input.isLocked() && state === "PAUSED") {
-      ui.setLockHint(false);
-      audio.resume();
-      last = performance.now();
-      acc = 0;
-      state = "PLAYING";
-    }
-  });
+  document.getElementById("lock-hint").addEventListener("click", resume);
   document.getElementById("intro").addEventListener("click", () => {
     input.lock();
     finishIntro();
@@ -287,8 +286,12 @@ async function boot() {
   });
 
   input.onLockChange((locked, error) => {
-    if (!locked && state === "PLAYING") pause();
-    if (error && state === "PAUSED") ui.setLockHint(true);
+    if (locked && state === "PAUSED" && ui.screen !== "settings") enterPlaying();
+    else if (!locked && state === "PLAYING") pause();
+    if (error && state === "PAUSED") {
+      ui.hideScreens();
+      ui.setLockHint(true);
+    }
   });
   input.onKey((code) => {
     if (state === "INTRO" && (code === "Space" || code === "Enter")) finishIntro();
@@ -319,6 +322,8 @@ async function boot() {
       log.error(err);
       if (loopErrors > 30) {
         state = "ERROR";
+        input.unlock();
+        audio.suspend();
         ui.showError(`Erro inesperado: ${err.message}`);
       }
     }

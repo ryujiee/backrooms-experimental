@@ -136,6 +136,12 @@ export function createDirector(rng) {
       scheduleStalk();
       nextEventAt = Math.min(nextEventAt, time + rng.range(15, 30));
     },
+    // A big scare just happened outside the director (vanish, a sighting): let it breathe.
+    peak(relief = 30) {
+      reliefUntil = Math.max(reliefUntil, time + relief);
+      nextEventAt = Math.max(nextEventAt, reliefUntil + rng.range(5, 15));
+      boost = Math.min(0.35, boost + 0.15);
+    },
     progressMade() {
       hintAt = time + HINT_AFTER;
     },

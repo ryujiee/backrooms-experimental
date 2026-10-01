@@ -25,6 +25,7 @@ export function createDebug(ctx) {
   let frames = 0;
   let fps = 0;
   let worst = 0;
+  let worstWindow = 0;
   let stuckT = 0;
   let pressToggle = false;
   let lastPos = null;
@@ -158,12 +159,13 @@ export function createDebug(ctx) {
     update(dt) {
       frames++;
       fpsT += dt;
-      worst = Math.max(worst, dt * 1000);
+      worstWindow = Math.max(worstWindow, dt * 1000);
       if (fpsT >= 1) {
         fps = Math.round(frames / fpsT);
+        worst = worstWindow;
+        worstWindow = 0;
         frames = 0;
         fpsT = 0;
-        if (!visible) worst = 0;
       }
       const s = ctx.session;
       if (autopilot && s && s.phase === "play") {

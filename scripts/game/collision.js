@@ -83,14 +83,20 @@ export function createCollision(map, extraBoxes = []) {
   const originZ = -(g.h / 2 + 1) * CELL;
   const occW = Math.ceil(((g.w + 2) * CELL) / OCC_RES);
   const occH = Math.ceil(((g.h + 2) * CELL) / OCC_RES);
+  // Two rasters: `occ` blocks sight (walls, pillars), `walk` also contains props.
   const occ = new Uint8Array(occW * occH);
+  const walk = new Uint8Array(occW * occH);
   const rasterize = (b, delta) => {
-    if (!b.sight) return;
     const x0 = Math.max(0, Math.floor((b.minX - originX) / OCC_RES));
     const x1 = Math.min(occW - 1, Math.floor((b.maxX - originX) / OCC_RES));
     const z0 = Math.max(0, Math.floor((b.minZ - originZ) / OCC_RES));
     const z1 = Math.min(occH - 1, Math.floor((b.maxZ - originZ) / OCC_RES));
-    for (let z = z0; z <= z1; z++) for (let x = x0; x <= x1; x++) occ[z * occW + x] += delta;
+    for (let z = z0; z <= z1; z++) {
+      for (let x = x0; x <= x1; x++) {
+        walk[z * occW + x] += delta;
+        if (b.sight) occ[z * occW + x] += delta;
+      }
+    }
   };
   boxes.forEach((b) => rasterize(b, 1));
 
@@ -157,8 +163,8 @@ export function createCollision(map, extraBoxes = []) {
     return false;
   }
 
-  // Amanatides-Woo traversal of the occupancy raster. True when nothing blocks the segment.
-  function segmentClear(ax, az, bx, bz) {
+  // Amanatides-Woo traversal of an occupancy raster. True when nothing blocks the segment.
+  function rasterClear(grid, ax, az, bx, bz) {
     let x = Math.floor((ax - originX) / OCC_RES);
     let z = Math.floor((az - originZ) / OCC_RES);
     const tx = Math.floor((bx - originX) / OCC_RES);
@@ -176,7 +182,7 @@ export function createCollision(map, extraBoxes = []) {
     const maxSteps = Math.abs(tx - x) + Math.abs(tz - z) + 2;
     for (let i = 0; i < maxSteps; i++) {
       if (x < 0 || z < 0 || x >= occW || z >= occH) return false;
-      if (occ[z * occW + x]) return false;
+      if (grid[z * occW + x]) return false;
       if (x === tx && z === tz) return true;
       if (tMaxX < tMaxZ) {
         tMaxX += invX;
@@ -189,7 +195,9 @@ export function createCollision(map, extraBoxes = []) {
     return true;
   }
 
-  // Wide clearance check for an agent of radius r (centre line plus both edges).
+  const segmentClear = (ax, az, bx, bz) => rasterClear(occ, ax, az, bx, bz);
+
+  // Walkable straight line for an agent of radius r (centre line plus both edges, props included).
   function corridorClear(ax, az, bx, bz, r) {
     const dx = bx - ax;
     const dz = bz - az;
@@ -197,9 +205,9 @@ export function createCollision(map, extraBoxes = []) {
     const ox = (-dz / len) * r;
     const oz = (dx / len) * r;
     return (
-      segmentClear(ax, az, bx, bz) &&
-      segmentClear(ax + ox, az + oz, bx + ox, bz + oz) &&
-      segmentClear(ax - ox, az - oz, bx - ox, bz - oz)
+      rasterClear(walk, ax, az, bx, bz) &&
+      rasterClear(walk, ax + ox, az + oz, bx + ox, bz + oz) &&
+      rasterClear(walk, ax - ox, az - oz, bx - ox, bz - oz)
     );
   }
 

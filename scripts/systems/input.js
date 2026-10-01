@@ -9,8 +9,8 @@ export function createInput(canvas) {
   const pressed = new Set();
   let mouseX = 0;
   let mouseY = 0;
-  let lockListeners = [];
-  let keyListeners = [];
+  const lockListeners = [];
+  const keyListeners = [];
   // Automated QA can drive the game without a real pointer lock.
   let virtualLock = false;
 
@@ -56,22 +56,32 @@ export function createInput(canvas) {
   });
   document.addEventListener("pointerlockerror", () => lockListeners.forEach((fn) => fn(false, true)));
 
-  async function lock() {
-    if (virtualLock || isLocked()) return true;
-    try {
-      // unadjustedMovement avoids OS acceleration where supported; fall back silently.
-      const req = canvas.requestPointerLock({ unadjustedMovement: true });
-      if (req && typeof req.then === "function") await req;
-      return true;
-    } catch {
+  // Resolves from the pointerlockchange / pointerlockerror events, not from the
+  // return value of requestPointerLock (a promise only in some browsers).
+  function lock() {
+    if (virtualLock || isLocked()) return Promise.resolve(true);
+    return new Promise((resolve) => {
+      let done = false;
+      const finish = (value) => {
+        if (done) return;
+        done = true;
+        document.removeEventListener("pointerlockchange", onChange);
+        document.removeEventListener("pointerlockerror", onError);
+        clearTimeout(timer);
+        resolve(value);
+      };
+      const onChange = () => isLocked() && finish(true);
+      const onError = () => finish(false);
+      document.addEventListener("pointerlockchange", onChange);
+      document.addEventListener("pointerlockerror", onError);
+      const timer = setTimeout(() => finish(isLocked()), 1500);
       try {
-        const req = canvas.requestPointerLock();
-        if (req && typeof req.then === "function") await req;
-        return true;
+        const r = canvas.requestPointerLock();
+        if (r && typeof r.catch === "function") r.catch(() => finish(false));
       } catch {
-        return false;
+        finish(false);
       }
-    }
+    });
   }
 
   return {

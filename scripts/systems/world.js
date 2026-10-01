@@ -99,7 +99,50 @@ function flickerValue(phase, t) {
 
 export const LAMP = { OFF: 0, ON: 1, FLICKER: 2 };
 
-export function createWorld({ scene, map, collision, lightField, lamp, textures, quality, rng, exitBoxes }) {
+// Materials are created once per page and shared by every run, so restarting never
+// recompiles shaders (per-frame colour tweaks are re-applied by each run's update).
+export function createWorldMaterials(textures, lamp) {
+  const mat = {
+    wall: patchLampMaterial(new THREE.MeshStandardMaterial({ map: textures.wall, roughness: 0.92 }), lamp, { macro: true }),
+    pillar: patchLampMaterial(new THREE.MeshStandardMaterial({ map: textures.wall, roughness: 0.92, color: 0xd9d2b8 }), lamp, { macro: true }),
+    concrete: patchLampMaterial(new THREE.MeshStandardMaterial({ color: 0x8d8a80, roughness: 0.95 }), lamp, { macro: true }),
+    floor: patchLampMaterial(new THREE.MeshStandardMaterial({ map: textures.carpet, roughness: 1 }), lamp, { macro: true }),
+    ceiling: patchLampMaterial(new THREE.MeshStandardMaterial({ map: textures.ceiling, roughness: 0.95 }), lamp, { macro: true }),
+    decal: patchLampMaterial(
+      new THREE.MeshStandardMaterial({
+        map: textures.decals,
+        transparent: true,
+        depthWrite: false,
+        polygonOffset: true,
+        polygonOffsetFactor: -2,
+        polygonOffsetUnits: -4,
+        roughness: 1,
+      }),
+      lamp
+    ),
+    lampFixture: new THREE.MeshBasicMaterial({ map: textures.lamp }),
+    chair: patchLampMaterial(new THREE.MeshStandardMaterial({ color: 0x3c4148, roughness: 0.85 }), lamp),
+    desk: patchLampMaterial(new THREE.MeshStandardMaterial({ color: 0x7d6c4f, roughness: 0.7 }), lamp),
+    box: patchLampMaterial(new THREE.MeshStandardMaterial({ map: textures.cardboard, roughness: 0.95 }), lamp),
+    wetSign: patchLampMaterial(new THREE.MeshStandardMaterial({ map: textures.wetSign, side: THREE.DoubleSide, roughness: 0.6 }), lamp),
+    woodDoor: patchLampMaterial(new THREE.MeshStandardMaterial({ map: textures.woodDoor, roughness: 0.8 }), lamp),
+    metalDoor: patchLampMaterial(new THREE.MeshStandardMaterial({ map: textures.metalDoor, roughness: 0.55, metalness: 0.3 }), lamp),
+    darkMetal: patchLampMaterial(new THREE.MeshStandardMaterial({ color: 0x2b2b28, roughness: 0.6, metalness: 0.4 }), lamp),
+    panel: patchLampMaterial(new THREE.MeshStandardMaterial({ map: textures.panel, roughness: 0.55, metalness: 0.35 }), lamp),
+    plastic: patchLampMaterial(new THREE.MeshStandardMaterial({ color: 0x1d1d1b, roughness: 0.5 }), lamp),
+    tape: patchLampMaterial(new THREE.MeshStandardMaterial({ map: textures.tapeLabel, roughness: 0.4, emissive: 0x111111 }), lamp),
+    battery: patchLampMaterial(new THREE.MeshStandardMaterial({ color: 0xd8b13a, roughness: 0.35, metalness: 0.5, emissive: 0x3a2c05 }), lamp),
+    sign: new THREE.MeshBasicMaterial({ map: textures.exitSign, color: 0x221111 }),
+    chamber: new THREE.MeshBasicMaterial({ color: new THREE.Color(3.2, 3.1, 2.9), side: THREE.BackSide, fog: false }),
+    ledRed: new THREE.MeshBasicMaterial({ color: new THREE.Color(3, 0.1, 0.05) }),
+    ledGreen: new THREE.MeshBasicMaterial({ color: new THREE.Color(0.1, 3, 0.3) }),
+    redLamp: new THREE.MeshBasicMaterial({ color: 0x220505 }),
+  };
+  mat.decal.customProgramCacheKey = () => "lamp-decal";
+  return mat;
+}
+
+export function createWorld({ scene, map, collision, lightField, lamp, textures, quality, rng, exitBoxes, materials }) {
   const g = map.grid;
   const root = new THREE.Group();
   root.name = "world";
@@ -107,45 +150,7 @@ export function createWorld({ scene, map, collision, lightField, lamp, textures,
   const disposables = [];
   const track = (x) => (disposables.push(x), x);
 
-  const mat = {
-    wall: track(patchLampMaterial(new THREE.MeshStandardMaterial({ map: textures.wall, roughness: 0.92 }), lamp, { macro: true })),
-    pillar: track(patchLampMaterial(new THREE.MeshStandardMaterial({ map: textures.wall, roughness: 0.92, color: 0xd9d2b8 }), lamp, { macro: true })),
-    concrete: track(patchLampMaterial(new THREE.MeshStandardMaterial({ color: 0x8d8a80, roughness: 0.95 }), lamp, { macro: true })),
-    floor: track(patchLampMaterial(new THREE.MeshStandardMaterial({ map: textures.carpet, roughness: 1 }), lamp, { macro: true })),
-    ceiling: track(patchLampMaterial(new THREE.MeshStandardMaterial({ map: textures.ceiling, roughness: 0.95 }), lamp, { macro: true })),
-    decal: track(
-      patchLampMaterial(
-        new THREE.MeshStandardMaterial({
-          map: textures.decals,
-          transparent: true,
-          depthWrite: false,
-          polygonOffset: true,
-          polygonOffsetFactor: -2,
-          polygonOffsetUnits: -4,
-          roughness: 1,
-        }),
-        lamp
-      )
-    ),
-    lampFixture: track(new THREE.MeshBasicMaterial({ map: textures.lamp })),
-    chair: track(patchLampMaterial(new THREE.MeshStandardMaterial({ color: 0x3c4148, roughness: 0.85 }), lamp)),
-    desk: track(patchLampMaterial(new THREE.MeshStandardMaterial({ color: 0x7d6c4f, roughness: 0.7 }), lamp)),
-    box: track(patchLampMaterial(new THREE.MeshStandardMaterial({ map: textures.cardboard, roughness: 0.95 }), lamp)),
-    wetSign: track(patchLampMaterial(new THREE.MeshStandardMaterial({ map: textures.wetSign, side: THREE.DoubleSide, roughness: 0.6 }), lamp)),
-    woodDoor: track(patchLampMaterial(new THREE.MeshStandardMaterial({ map: textures.woodDoor, roughness: 0.8 }), lamp)),
-    metalDoor: track(patchLampMaterial(new THREE.MeshStandardMaterial({ map: textures.metalDoor, roughness: 0.55, metalness: 0.3 }), lamp)),
-    darkMetal: track(patchLampMaterial(new THREE.MeshStandardMaterial({ color: 0x2b2b28, roughness: 0.6, metalness: 0.4 }), lamp)),
-    panel: track(patchLampMaterial(new THREE.MeshStandardMaterial({ map: textures.panel, roughness: 0.55, metalness: 0.35 }), lamp)),
-    plastic: track(patchLampMaterial(new THREE.MeshStandardMaterial({ color: 0x1d1d1b, roughness: 0.5 }), lamp)),
-    tape: track(patchLampMaterial(new THREE.MeshStandardMaterial({ map: textures.tapeLabel, roughness: 0.4, emissive: 0x111111 }), lamp)),
-    battery: track(patchLampMaterial(new THREE.MeshStandardMaterial({ color: 0xd8b13a, roughness: 0.35, metalness: 0.5, emissive: 0x3a2c05 }), lamp)),
-    sign: track(new THREE.MeshBasicMaterial({ map: textures.exitSign, color: 0x221111 })),
-    chamber: track(new THREE.MeshBasicMaterial({ color: new THREE.Color(3.2, 3.1, 2.9), side: THREE.BackSide, fog: false })),
-    ledRed: track(new THREE.MeshBasicMaterial({ color: new THREE.Color(3, 0.1, 0.05) })),
-    ledGreen: track(new THREE.MeshBasicMaterial({ color: new THREE.Color(0.1, 3, 0.3) })),
-    redLamp: track(new THREE.MeshBasicMaterial({ color: 0x220505 })),
-  };
-  mat.decal.customProgramCacheKey = () => "lamp-decal";
+  const mat = materials;
 
   // --- static chunks -----------------------------------------------------------
   const chunks = new Map();
@@ -374,8 +379,11 @@ export function createWorld({ scene, map, collision, lightField, lamp, textures,
 
   const lampState = new Uint8Array(map.lamps.length);
   const lampOverride = new Float32Array(map.lamps.length).fill(-1); // temporary dims (events)
+  const flickering = new Set();
   function setLamp(i, state) {
     lampState[i] = state;
+    if (state === LAMP.FLICKER) flickering.add(i);
+    else flickering.delete(i);
     const lit = state === LAMP.ON && lampOverride[i] < 0 ? 1 : state === LAMP.ON ? lampOverride[i] : 0;
     lightField.setLampLevel(i, lit);
     writeLampColor(i, state === LAMP.ON ? (lampOverride[i] >= 0 ? lampOverride[i] : 1) : state === LAMP.FLICKER ? 0.6 : 0);
@@ -460,7 +468,8 @@ export function createWorld({ scene, map, collision, lightField, lamp, textures,
   const door = new THREE.Group();
   const doorW = 1.3;
   const doorH = 2.2;
-  const sideW = (CELL + T) / 2 - doorW / 2;
+  // Side pieces stop at +-(CELL/2 - T/2): the neighbouring wall runs already cover the rest.
+  const sideW = (CELL - T) / 2 - doorW / 2;
   const sideGeo = track(boxGeo(sideW, H, T));
   const leftPiece = new THREE.Mesh(sideGeo, mat.wall);
   leftPiece.position.set(-(doorW / 2 + sideW / 2), H / 2, 0);
@@ -532,8 +541,7 @@ export function createWorld({ scene, map, collision, lightField, lamp, textures,
     if (poolTimer <= 0) {
       poolTimer = 0.2;
       const near = [];
-      for (let i = 0; i < lampPos.length; i++) {
-        if (lampState[i] !== LAMP.FLICKER) continue;
+      for (const i of flickering) {
         const d = (lampPos[i].x - player.x) ** 2 + (lampPos[i].z - player.z) ** 2;
         if (d < 22 * 22) near.push({ i, d });
       }
@@ -546,10 +554,7 @@ export function createWorld({ scene, map, collision, lightField, lamp, textures,
     }
 
     // Flicker: pooled lights + fixture colours of flickering lamps.
-    for (let i = 0; i < lampPos.length; i++) {
-      if (lampState[i] !== LAMP.FLICKER) continue;
-      writeLampColor(i, flickerValue(map.lamps[i].phase, time));
-    }
+    for (const i of flickering) writeLampColor(i, flickerValue(map.lamps[i].phase, time));
     let nearestTick = null;
     for (const light of pool) {
       const li = light.userData.lamp;
@@ -707,6 +712,7 @@ export function createWorld({ scene, map, collision, lightField, lamp, textures,
       tmpObj.updateMatrix();
       chairs.setMatrixAt(slot, tmpObj.matrix);
       chairs.instanceMatrix.needsUpdate = true;
+      chairs.computeBoundingSphere();
       return true;
     },
     chairProps: () => byType("chair"),
@@ -714,9 +720,16 @@ export function createWorld({ scene, map, collision, lightField, lamp, textures,
       if (fakeDoors.count >= fakeDoors.instanceMatrix.count) return false;
       const f = wallFrame(g, slot.x, slot.y, slot.dir, -0.005);
       pushInstance(fakeDoors, f.x, 0, f.z, f.yaw);
+      // Instanced bounds are cached on first render; refresh so the new door is not culled.
+      fakeDoors.computeBoundingSphere();
       return true;
     },
-    usedWallSlots: () => new Set(map.props.filter((p) => ["wallStain", "vent", "fakeDoor", "scribble"].includes(p.type)).map((p) => `${p.index}:${p.dir}`)),
+    // Wall slots already taken by props or objectives (a new door must not cover them).
+    usedWallSlots: () => {
+      const { power, tape, exit } = map.objectives;
+      const slots = map.props.filter((p) => ["wallStain", "vent", "fakeDoor", "scribble", "desk", "boxes"].includes(p.type)).map((p) => `${p.index}:${p.dir}`);
+      return new Set([...slots, `${power.index}:${power.dir}`, `${tape.index}:${tape.dir}`, `${exit.index}:${exit.dir}`]);
+    },
     dispose() {
       scene.remove(root);
       root.traverse((o) => {

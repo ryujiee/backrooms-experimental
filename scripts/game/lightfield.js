@@ -27,6 +27,9 @@ export function createLightField(map, collision) {
   const splats = new Array(map.lamps.length);
   const bytes = new Uint8Array(sizeX * sizeZ * 4);
   let dirty = true;
+  // Only rows touched since the last encode are re-encoded.
+  let dirtyMin = 0;
+  let dirtyMax = sizeZ - 1;
 
   function computeSplat(li) {
     const lamp = map.lamps[li];
@@ -48,7 +51,12 @@ export function createLightField(map, collision) {
         wts.push(win * win * (0.55 + 0.45 * Math.exp(-d2 / 4)));
       }
     }
-    return { idx: Uint32Array.from(idx), w: Float32Array.from(wts) };
+    return {
+      idx: Uint32Array.from(idx),
+      w: Float32Array.from(wts),
+      rowMin: Math.max(0, cz - r),
+      rowMax: Math.min(sizeZ - 1, cz + r),
+    };
   }
 
   function setLampLevel(li, level) {
@@ -65,6 +73,8 @@ export function createLightField(map, collision) {
       accum[o + 1] += v * col[1];
       accum[o + 2] += v * col[2];
     }
+    dirtyMin = dirty ? Math.min(dirtyMin, s.rowMin) : s.rowMin;
+    dirtyMax = dirty ? Math.max(dirtyMax, s.rowMax) : s.rowMax;
     dirty = true;
   }
 
@@ -79,13 +89,17 @@ export function createLightField(map, collision) {
 
   // sqrt encoding keeps precision in the dark end where it matters.
   function encode() {
-    for (let i = 0, o = 0; i < accum.length; i += 3, o += 4) {
+    const start = dirtyMin * sizeX;
+    const end = (dirtyMax + 1) * sizeX;
+    for (let i = start * 3, o = start * 4; i < end * 3; i += 3, o += 4) {
       bytes[o] = Math.sqrt(Math.max(0, Math.min(1, accum[i] / LIGHT_MAX))) * 255;
       bytes[o + 1] = Math.sqrt(Math.max(0, Math.min(1, accum[i + 1] / LIGHT_MAX))) * 255;
       bytes[o + 2] = Math.sqrt(Math.max(0, Math.min(1, accum[i + 2] / LIGHT_MAX))) * 255;
       bytes[o + 3] = 255;
     }
     dirty = false;
+    dirtyMin = sizeZ;
+    dirtyMax = -1;
     return bytes;
   }
 

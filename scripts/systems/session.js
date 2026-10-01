@@ -23,6 +23,20 @@ const GRACE = 75; // seconds before the creature becomes active at all
 const STAGE_POWER = [0.8, 1.0, 0.88, 0.95, 0.95];
 
 const INTERACT = "KeyE";
+// Loudness of the creature's breathing/growl per state (it is mostly heard before it is seen).
+const CREATURE_VOICE = {
+  DORMANT: 0,
+  IDLE: 0.08,
+  PATROL: 0.1,
+  INVESTIGATE: 0.16,
+  SEARCH: 0.18,
+  STALK: 0.05,
+  CROSS: 0.12,
+  ALERT: 0.7,
+  CHASE: 0.6,
+  COOLDOWN: 0.05,
+  ATTACK: 0.9,
+};
 
 function localRectToWorld(frame, x0, x1, z0, z1) {
   const pts = [
@@ -66,7 +80,7 @@ export function createSession(opts) {
   const collision = createCollision(map, extra);
   const exitBoxes = { door: collision.extraIds[2] };
   const lightField = createLightField(map, collision);
-  const world = createWorld({ scene, map, collision, lightField, lamp, textures, quality, rng, exitBoxes });
+  const world = createWorld({ scene, map, collision, lightField, lamp, textures, quality, rng, exitBoxes, materials: opts.materials });
   lamp.bind(lightField);
 
   const spawnC = cellCenter(g, map.spawn.index % g.w, (map.spawn.index / g.w) | 0);
@@ -84,7 +98,7 @@ export function createSession(opts) {
   let sequenceT = 0;
   let result = null;
   let pending = [];
-  let noises = [];
+  const noises = [];
   let holdNoiseT = 0;
   let presenceT = 0;
   let buzzT = 0;
@@ -100,7 +114,6 @@ export function createSession(opts) {
   let graceUntil = GRACE;
   let inputOverride = null;
   const tmpV = new THREE.Vector3();
-  const lastSeenByPlayer = { t: -999 };
 
   // --- setup ---------------------------------------------------------------
   view.reset();
@@ -462,7 +475,8 @@ export function createSession(opts) {
       ui.message(res.message, 2.5);
       audio.doorLocked({ x: d.x, y: 1.2, z: d.z });
     }
-    if (objectives.holding) {
+    // Working the panel/door is loud, but only while E is actually held on it.
+    if (inp.interactHeld && res.prompt && objectives.current.hold) {
       holdNoiseT -= dt;
       if (holdNoiseT <= 0) {
         holdNoiseT = 0.9;
@@ -490,7 +504,6 @@ export function createSession(opts) {
 
     // Creature.
     const playerSees = canSeeMonster();
-    if (playerSees) lastSeenByPlayer.t = time;
     const camF = view.getForward(tmpV);
     const camLen = Math.hypot(camF.x, camF.z) || 1;
     monster.update(dt, {
@@ -509,8 +522,9 @@ export function createSession(opts) {
       playerSeesMonster: playerSees,
       godMode,
     });
-    noises = [];
+    noises.length = 0;
     for (const e of monster.drainEvents()) handleMonsterEvent(e, playerSees);
+    if (phase !== "play") return;
 
     // Keep a presence: if it drifted very far for a long time, bring it back (out of sight, far).
     const mDist = Math.hypot(monster.pos.x - player.pos.x, monster.pos.z - player.pos.z);
@@ -569,8 +583,7 @@ export function createSession(opts) {
         view.addTrauma(0.5);
         glitch = 1.5;
         later(0.4, () => relocateFar(14));
-        break;
-      case "relocateFar":
+        director.peak();
         break;
       case "step": {
         const dist = Math.hypot(e.x - player.pos.x, e.z - player.pos.z);
@@ -685,19 +698,7 @@ export function createSession(opts) {
       outside: phase === "winning" ? Math.min(1, sequenceT / 2) : stage >= 4 && mDist >= 0 ? 0.15 : 0,
     });
     if (!menu) {
-      const level = {
-        DORMANT: 0,
-        IDLE: 0.08,
-        PATROL: 0.1,
-        INVESTIGATE: 0.16,
-        SEARCH: 0.18,
-        STALK: 0.05,
-        CROSS: 0.12,
-        ALERT: 0.7,
-        CHASE: 0.6,
-        COOLDOWN: 0.05,
-        ATTACK: 0.9,
-      }[monster.state];
+      const level = CREATURE_VOICE[monster.state];
       const occluded = !collision.segmentClear(player.pos.x, player.pos.z, monster.pos.x, monster.pos.z);
       audio.setMonster(monster.pos, phase === "winning" ? 0 : level * (occluded ? 0.55 : 1), hunting ? 1 : 0.2);
     }
@@ -716,6 +717,7 @@ export function createSession(opts) {
       stalkSeen = true;
       audio.stinger();
       glitch = 0.5;
+      director.peak();
     }
     extra.effects.set({
       stress: menu ? 0 : Math.min(1, tension * 0.9 + (hunting ? 0.2 : 0)),
@@ -748,7 +750,7 @@ export function createSession(opts) {
     beginWake() {
       phase = "wake";
       wake = 0;
-      ui.setObjective(STEPS[0].text, 9);
+      ui.setObjective(objectives.current.text, 9);
       ui.setControlsHint("[F] lanterna   [Shift] correr   [C] agachar   [E] interagir", 10);
     },
     get phase() {
