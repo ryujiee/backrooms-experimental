@@ -180,6 +180,23 @@ const scenarios = {
     return fs.readdirSync(dir);
   },
 
+  // Production build: no debug API. Pointer lock is refused (no real user gesture),
+  // so after the intro the game must land in PAUSED instead of running unlocked.
+  async prodflow(page) {
+    await page.send("Page.navigate", { url: URL_BASE });
+    await sleep(6000);
+    const menu = await page.eval("document.querySelector('.screen.active')?.id");
+    await page.eval("document.querySelector('#screen-menu [data-action=play]').click()");
+    await sleep(11000);
+    await page.shot("prodflow");
+    return {
+      menu,
+      after: await page.eval("document.querySelector('.screen.active')?.id || null"),
+      lockHint: await page.eval("!document.getElementById('lock-hint').classList.contains('hidden')"),
+      hud: await page.eval("!document.getElementById('hud').classList.contains('hidden')"),
+    };
+  },
+
   async probe(page) {
     await page.send("Page.navigate", { url: `${URL_BASE}?debug` });
     await sleep(8000);
