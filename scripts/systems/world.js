@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
-import { CELL, WALL_HEIGHT, WALL_THICKNESS, PILLAR_SIZE, cellCenter, cornerWorld } from "../game/grid.js";
+import { CELL, WALL_HEIGHT, WALL_THICKNESS, PILLAR_SIZE, cellCenter, cornerWorld, hasWall } from "../game/grid.js";
 import { propTransform, objectiveTransforms, batteryTransform, wallFrame, PROP_SIZE } from "../game/placement.js";
 import { patchLampMaterial } from "./lampShader.js";
 import { createStaticScreen } from "./textures.js";
@@ -699,9 +699,13 @@ export function createWorld({ scene, map, collision, lightField, lamp, textures,
       const slot = chairIndex.get(prop);
       const entry = collision.propBoxes.find((pb) => pb.prop === prop);
       if (slot === undefined || !entry) return false;
-      const c = cellCenter(g, prop.x, prop.y);
-      const nx = c.x + rng.range(-0.75, 0.75);
-      const nz = c.z + rng.range(-0.75, 0.75);
+      // Somewhere else along a wall of the same cell (never in the walking line).
+      const walls = [0, 1, 2, 3].filter((dir) => hasWall(g, prop.x, prop.y, dir));
+      if (!walls.length) return false;
+      const f = wallFrame(g, prop.x, prop.y, rng.pick(walls), 0.45);
+      const slide = rng.range(-0.6, 0.6);
+      const nx = f.x + f.tangent.x * slide;
+      const nz = f.z + f.tangent.z * slide;
       const yaw = rng.range(-Math.PI, Math.PI);
       const hw = PROP_SIZE.chair.hw * 1.42;
       collision.moveBox(entry.box, nx - hw, nz - hw, nx + hw, nz + hw);

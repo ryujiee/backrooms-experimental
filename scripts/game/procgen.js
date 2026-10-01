@@ -579,7 +579,8 @@ function placeProps(g, rng, reserved, exit, power, tape) {
     }
   }
 
-  addFloor("chair", rng.int(7, 10));
+  // Chairs lean on a wall so they never sit in a doorway or a walking line.
+  addFloor("chair", rng.int(7, 10), () => true, true);
   addFloor("desk", rng.int(2, 4), (i) => g.zone[i] === ZONE.OFFICE, true);
   addFloor("boxes", rng.int(3, 5), () => true, true);
   addFloor("wetSign", rng.int(1, 2), (i) => g.zone[i] === ZONE.DAMP || g.zone[i] === ZONE.OFFICE);
